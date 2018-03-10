@@ -2,13 +2,15 @@
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "scripts": {
-    "lint": "eslint .",
-    "serve": "firebase serve --only functions",
-    "shell": "firebase experimental:functions:shell",
+    "lint": "tslint --project tsconfig.json",
+    "build": "tsc",
+    "serve": "npm run build && firebase serve --only functions",
+    "shell": "npm run build && firebase experimental:functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
+  "main": "lib/index.js",
   "dependencies": {
     "actions-on-google": "^1.10.0",
     "firebase-admin": "~5.8.1",
@@ -16,8 +18,12 @@
     "request": "^2.83.0"
   },
   "devDependencies": {
+    "@types/actions-on-google": "^1.8.0",
+    "@types/request": "^2.47.0",
     "eslint": "^4.12.0",
-    "eslint-plugin-promise": "^3.6.0"
+    "eslint-plugin-promise": "^3.6.0",
+    "tslint": "^5.9.1",
+    "typescript": "^2.7.2"
   },
   "private": true
 }
