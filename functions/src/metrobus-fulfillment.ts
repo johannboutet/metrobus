@@ -4,15 +4,16 @@ import { BusLineStopTime } from 'models/rtc_responses';
 import { UserInterface } from 'models/user';
 import * as request from 'request';
 
+const metrobusActions = {
+  WELCOME: 'input.welcome',
+  STORE_LOCATION: 'store_location',
+  GET_STOP_TIMES: 'get_stop_times',
+};
+
 export class MetrobusFulfillment {
   private app: DialogflowApp;
   private permissions;
   private userStorage: UserInterface;
-
-  private metrobusActions = {
-    WELCOME_ACTION: 'input.welcome',
-    GET_STOP_TIMES_ACTION: 'get_stop_times',
-  };
 
   constructor(req: Request, res: Response) {
     this.app = new DialogflowApp({
@@ -27,8 +28,9 @@ export class MetrobusFulfillment {
   run() {
     const actionMap = new Map();
 
-    actionMap.set(this.metrobusActions.WELCOME_ACTION, this.requestLocation);
-    actionMap.set(this.metrobusActions.GET_STOP_TIMES_ACTION, this.getStopTimes);
+    actionMap.set(metrobusActions.WELCOME, this.requestLocation);
+    actionMap.set(metrobusActions.STORE_LOCATION, this.storeLocation);
+    actionMap.set(metrobusActions.GET_STOP_TIMES, this.getStopTimes);
 
     this.app.handleRequest(actionMap);
   }
@@ -37,11 +39,19 @@ export class MetrobusFulfillment {
     this.app.askForPermission('Pour trouver les arrêts de bus proches de vous', this.permissions.DEVICE_PRECISE_LOCATION);
   };
 
-  getStopTimes = () => {
+  storeLocation = () => {
     if (this.app.isPermissionGranted()) {
-      const deviceCoordinates = this.app.getDeviceLocation().coordinates;
-      console.log('location', deviceCoordinates);
+      this.userStorage.location = this.app.getDeviceLocation().coordinates;
 
+      this.app.tell('Merci, je peux maintenant vous donner les horaires de passage aux arrêts de bus proches de chez vous. Vous pouvez me redemander de vous localiser à tout moment pour mettre à jour votre position.')
+    }
+    else {
+      this.app.tell('Je ne peux pas vous donner les horaires de passage aux arrêts de bus proches de chez vous si je n\'ai pas votre localisation.');
+    }
+  };
+
+  getStopTimes = () => {
+    if (this.userStorage.location) {
       request('https://wsmobile.rtcquebec.ca/api/v2/horaire/ListeBorneVirtuelle_Arret?source=appmobileios&arrets=2557', (error, response, body) => {
         if (error || (response && response.statusCode !== 200)) {
           this.sorry();
@@ -63,7 +73,7 @@ export class MetrobusFulfillment {
       });
     }
     else {
-      this.app.tell('Désolé, je n\'ai pas pu vous localiser.');
+      this.app.tell('Il semblerait que je ne connaisse pas votre localisation. Demandez-moi de vous localiser pour m\'aider à trouver votre adresse.');
     }
   };
 
