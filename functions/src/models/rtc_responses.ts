@@ -4,7 +4,7 @@ export interface StopTime {
   ntr: boolean;
 }
 
-export interface BusLine {
+export interface StopBusLine {
   noParcours: string;
   description: string;
   codeDirection: string;
@@ -23,10 +23,22 @@ export interface BusStop {
 }
 
 export interface BusLineStopTime {
-  parcours: BusLine;
+  parcours: StopBusLine;
   arret: BusStop;
   arretNonDesservi: boolean;
   parcoursX: boolean;
   parcoursDetour: boolean;
   horaires: StopTime[];
+}
+
+export interface BusLine {
+  noParcours: string;
+  description: string;
+  codeDirectionPrincipale: string;
+  descriptionDirectionPrincipale: string;
+  codeDirectionRetour: string;
+  descriptionDirectionRetour: string;
+  codeTypeService: number;
+  accessible: boolean;
+  jours: string;
 }

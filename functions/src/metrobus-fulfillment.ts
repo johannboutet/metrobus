@@ -1,6 +1,6 @@
 import { DialogflowApp } from 'actions-on-google';
 import { Request, Response } from 'express';
-import { BusLineStopTime } from 'models/rtc_responses';
+import { BusLine, BusLineStopTime } from 'models/rtc_responses';
 import { UserInterface } from 'models/user';
 import * as request from 'request';
 
@@ -9,7 +9,7 @@ const metrobusActions = {
   REQUEST_LOCATION: 'request_location',
   STORE_LOCATION: 'store_location',
   ASK_FAVORITE_BUS_LINE: 'ask_favorite_bus_line',
-  STORE_FAVORITE_BUS_LINE: 'store_favorite_bus_line',
+  SET_FAVORITE_BUS_LINE_NUMBER: 'set_favorite_bus_line_number',
   GET_FAVORITE_BUS_LINE: 'get_favorite_bus_line',
   FAVORITE_BUS_LINE_FOLLOW_UP_NO: 'favorite_bus_line_follow_up_no',
   GET_STOP_TIMES: 'get_stop_times',
@@ -39,7 +39,7 @@ export class MetrobusFulfillment {
     actionMap.set(metrobusActions.STORE_LOCATION, this.storeLocation);
 
     actionMap.set(metrobusActions.ASK_FAVORITE_BUS_LINE, this.askFavoriteBusLine);
-    actionMap.set(metrobusActions.STORE_FAVORITE_BUS_LINE, this.storeFavoriteBusLine);
+    actionMap.set(metrobusActions.SET_FAVORITE_BUS_LINE_NUMBER, this.setFavoriteBusLineNumber);
     actionMap.set(metrobusActions.GET_FAVORITE_BUS_LINE, this.getFavoriteBusLine);
     actionMap.set(metrobusActions.FAVORITE_BUS_LINE_FOLLOW_UP_NO, this.favoriteBusLineFollowUpNo);
 
@@ -64,20 +64,55 @@ export class MetrobusFulfillment {
   };
 
   askFavoriteBusLine = () => {
+    if (!this.app.hasSurfaceCapability(this.app.SurfaceCapabilities.SCREEN_OUTPUT)) {
+      this.app.tell('Désolé, je ne peux pas effectuer cette action sur un haut-parleur. Veuillez réessayer sur un appareil avec un écran.');
+    }
+
     this.app.ask('Quelle est votre ligne de bus favorite ?');
   };
 
-  storeFavoriteBusLine = () => {
-    const lineNumber = +this.app.getArgument('bus_line');
-    const line = {
-      number: lineNumber,
-      direction: 'ouest',
-    };
+  setFavoriteBusLineNumber = () => {
+    if (this.app.getArgument('bus_line_number')) {
+      const lineNumber = `${this.app.getArgument('bus_line_number')}`;
 
-    this.userStorage.favoriteBusLine = line;
+      request.get(
+        'https://wsmobile.rtcquebec.ca/api/v2/horaire/ListeParcours?source=appmobileios',
+        (error, response, body) => {
+          if (error || (response && response.statusCode !== 200)) {
+            console.log('ERROR RTC', error);
+            console.log('RESPONSE RTC', response);
 
-    this.app.tell(`Votre ligne favorite est maintenant le bus ${line.number} direction ${line.direction}.`);
+            this.app.tell('Désolé, je n\'ai pas pu accéder à la liste des lignes de bus du RTC.');
+          }
+
+          const lines: BusLine[] = JSON.parse(body);
+          const favoriteLine = lines.find(line => line.noParcours === lineNumber);
+
+          if (favoriteLine) {
+            this.userStorage.favoriteBusLine = {
+              number: lineNumber,
+              direction: null,
+            };
+
+            const directions = [favoriteLine.descriptionDirectionPrincipale, favoriteLine.descriptionDirectionRetour].join(' et ');
+
+            this.app.askWithList(
+              `Les direction pour la ligne ${lineNumber} sont ${directions}. Laquelle voulez-vous choisir ?`,
+              this.app.buildList().addItems([
+                this.app.buildOptionItem('bus_direction_aller').setTitle(favoriteLine.descriptionDirectionPrincipale),
+                this.app.buildOptionItem('bus_direction_retour').setTitle(favoriteLine.descriptionDirectionRetour),
+              ]),
+            );
+          }
+          else {
+            this.app.tell(`Désolé, je n'ai pas pu trouver de ligne bus pour le numéro ${lineNumber}`);
+          }
+        },
+      );
+    }
   };
+
+  // TODO: Handle selected option for bus line direction
 
   getFavoriteBusLine = () => {
     const line = this.userStorage.favoriteBusLine;
@@ -121,7 +156,6 @@ export class MetrobusFulfillment {
       request('https://wsmobile.rtcquebec.ca/api/v2/horaire/ListeBorneVirtuelle_Arret?source=appmobileios&arrets=2557', (error, response, body) => {
         if (error || (response && response.statusCode !== 200)) {
           this.sorry();
-          return;
         }
 
         const schedules: BusLineStopTime[] = JSON.parse(body);
@@ -129,7 +163,6 @@ export class MetrobusFulfillment {
 
         if (!busLine) {
           this.sorry();
-          return;
         }
 
         const times = busLine.horaires.map((schedule) => schedule.departMinutes).sort((a, b) => a - b).join(', ');
