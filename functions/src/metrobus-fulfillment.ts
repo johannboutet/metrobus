@@ -10,6 +10,7 @@ const metrobusActions = {
   STORE_LOCATION: 'store_location',
   ASK_FAVORITE_BUS_LINE: 'ask_favorite_bus_line',
   SET_FAVORITE_BUS_LINE_NUMBER: 'set_favorite_bus_line_number',
+  SET_FAVORITE_BUS_LINE_DIRECTION: 'set_favorite_bus_line_direction',
   GET_FAVORITE_BUS_LINE: 'get_favorite_bus_line',
   FAVORITE_BUS_LINE_FOLLOW_UP_NO: 'favorite_bus_line_follow_up_no',
   GET_STOP_TIMES: 'get_stop_times',
@@ -40,6 +41,7 @@ export class MetrobusFulfillment {
 
     actionMap.set(metrobusActions.ASK_FAVORITE_BUS_LINE, this.askFavoriteBusLine);
     actionMap.set(metrobusActions.SET_FAVORITE_BUS_LINE_NUMBER, this.setFavoriteBusLineNumber);
+    actionMap.set(metrobusActions.SET_FAVORITE_BUS_LINE_DIRECTION, this.setFavoriteBusLineDirection);
     actionMap.set(metrobusActions.GET_FAVORITE_BUS_LINE, this.getFavoriteBusLine);
     actionMap.set(metrobusActions.FAVORITE_BUS_LINE_FOLLOW_UP_NO, this.favoriteBusLineFollowUpNo);
 
@@ -94,10 +96,15 @@ export class MetrobusFulfillment {
               direction: null,
             };
 
-            const directions = [favoriteLine.descriptionDirectionPrincipale, favoriteLine.descriptionDirectionRetour].join(' et ');
+            const dirText = [favoriteLine.descriptionDirectionPrincipale, favoriteLine.descriptionDirectionRetour].join(' et ');
+            const dirContext = {
+              bus_direction_aller: favoriteLine.descriptionDirectionPrincipale,
+              bus_direction_retour: favoriteLine.descriptionDirectionRetour,
+            };
 
+            this.app.setContext('bus_line_directions', 5, dirContext);
             this.app.askWithList(
-              `Les direction pour la ligne ${lineNumber} sont ${directions}. Laquelle voulez-vous choisir ?`,
+              `Les directions pour la ligne ${lineNumber} sont ${dirText}. Laquelle voulez-vous choisir ?`,
               this.app.buildList().addItems([
                 this.app.buildOptionItem('bus_direction_aller').setTitle(favoriteLine.descriptionDirectionPrincipale),
                 this.app.buildOptionItem('bus_direction_retour').setTitle(favoriteLine.descriptionDirectionRetour),
@@ -105,14 +112,30 @@ export class MetrobusFulfillment {
             );
           }
           else {
-            this.app.tell(`Désolé, je n'ai pas pu trouver de ligne bus pour le numéro ${lineNumber}`);
+            this.app.tell(`Désolé, je n'ai pas pu trouver de ligne bus pour le numéro ${lineNumber}.`);
           }
         },
       );
     }
   };
 
-  // TODO: Handle selected option for bus line direction
+  setFavoriteBusLineDirection = () => {
+    const choice = this.app.getSelectedOption();
+
+    if (choice) {
+      const direction = this.app.getContextArgument('bus_line_directions', choice) as { value: string };
+
+      if (direction) {
+        this.userStorage.favoriteBusLine.direction = `${direction.value}`;
+
+        const line = this.userStorage.favoriteBusLine;
+
+        this.app.tell(`Votre ligne favorite est maintenant le bus ${line.number} direction ${line.direction}.`);
+      }
+    }
+
+    this.app.tell('Désolé, je n\'ai pas pu trouver cette direction.');
+  };
 
   getFavoriteBusLine = () => {
     const line = this.userStorage.favoriteBusLine;
